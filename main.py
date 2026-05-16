@@ -59,9 +59,9 @@ def create_app() -> FastAPI:
             "environment": settings.app_env,
         }
 
-    # Routes registered in later phases
-    # from app.api.debug_routes import router as debug_router
-    # app.include_router(debug_router)
+    # Routes
+    from app.api.debug_routes import router as debug_router
+    app.include_router(debug_router)
 
     return app
 
