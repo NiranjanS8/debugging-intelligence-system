@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from app.config import get_settings
+from app.models.debug_entry import SimilarEntry
 from app.utils.text_processing import generate_slug
 from app.utils.logger import get_logger
 
@@ -50,3 +52,49 @@ class MarkdownStorage:
             if dir_path.exists():
                 results.extend(f"{subdir}/{f.name}" for f in dir_path.glob("*.md"))
         return results
+
+    def update_related_links(
+        self,
+        relative_path: str,
+        related_entries: list[SimilarEntry],
+    ) -> None:
+        existing = self.read(relative_path)
+        if existing is None:
+            return
+
+        related_section = self._build_related_section(related_entries)
+        entry_id_match = re.search(r"\n<!-- entry_id: .*? -->\s*$", existing, re.DOTALL)
+        entry_id_block = entry_id_match.group(0).strip() if entry_id_match else ""
+        body = re.sub(
+            r"\n## Related Entries\n.*?(?=\n<!-- entry_id:|\Z)",
+            "\n",
+            existing,
+            flags=re.DOTALL,
+        ).rstrip()
+
+        parts = [body]
+        if related_section:
+            parts.append(related_section)
+        if entry_id_block:
+            parts.append(entry_id_block)
+
+        file_path = self.base_path / relative_path
+        file_path.write_text("\n\n".join(part for part in parts if part).rstrip() + "\n", encoding="utf-8")
+
+    def find_by_entry_id(self, entry_id: str) -> str | None:
+        marker = f"<!-- entry_id: {entry_id} -->"
+        for relative_path in self.list_entries():
+            content = self.read(relative_path)
+            if content and marker in content:
+                return relative_path
+        return None
+
+    def _build_related_section(self, related_entries: list[SimilarEntry]) -> str:
+        if not related_entries:
+            return ""
+
+        lines = ["## Related Entries"]
+        for entry in related_entries:
+            slug = generate_slug(entry.title)
+            lines.append(f"- [[{slug}|{entry.title}]] ({entry.id})")
+        return "\n".join(lines)

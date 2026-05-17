@@ -60,9 +60,13 @@ def create_app() -> FastAPI:
         }
 
     # Routes
+    from app.api.analytics_routes import router as analytics_router
     from app.api.debug_routes import router as debug_router
+    from app.api.knowledge_routes import router as knowledge_router
     from app.api.query_routes import router as query_router
+    app.include_router(analytics_router)
     app.include_router(debug_router)
+    app.include_router(knowledge_router)
     app.include_router(query_router)
 
     return app

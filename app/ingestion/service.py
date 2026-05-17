@@ -5,6 +5,7 @@ from app.ingestion.structurer import DebugStructurer
 from app.llm.factory import get_llm_provider
 from app.markdown.generator import MarkdownGenerator
 from app.markdown.storage import MarkdownStorage
+from app.retrieval.linker import RetrievalLinker
 from app.retrieval.service import RetrievalService
 from app.models.debug_entry import DebugEntry, DebugEntryResponse
 from app.utils.id_generator import generate_entry_id
@@ -21,6 +22,7 @@ class IngestionService:
         self.md_generator = MarkdownGenerator()
         self.md_storage = MarkdownStorage()
         self.retrieval = RetrievalService()
+        self.linker = RetrievalLinker()
 
     async def ingest(self, raw_input: str) -> DebugEntryResponse:
         parsed = self.parser.parse(raw_input)
@@ -56,6 +58,7 @@ class IngestionService:
 
         # Find similar entries to return as suggestions
         similar = self.retrieval.find_similar(entry_id, top_k=3)
+        self.linker.link_entry(entry, similar)
 
         logger.info(
             f"Ingested: {entry.title}",
