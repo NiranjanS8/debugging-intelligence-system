@@ -17,7 +17,7 @@ class DebugExplanationService:
         self.provider = get_llm_provider()
 
     async def explain(self, request: DebugExplainRequest) -> DebugExplanationResponse:
-        results = self.retrieval.semantic_search(request.raw_input, top_k=request.top_k)
+        results = self.retrieval.hybrid_search(request.raw_input, top_k=request.top_k)
         sources = [
             ExplanationSource(
                 id=result.id,

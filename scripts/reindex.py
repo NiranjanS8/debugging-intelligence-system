@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.markdown.storage import MarkdownStorage
 from app.models.debug_entry import DebugEntry
+from app.retrieval.linker import RetrievalLinker
 from app.retrieval.service import RetrievalService
 from app.utils.text_processing import infer_category
 
@@ -54,6 +55,7 @@ def _extract_entry_id(content: str, fallback: str) -> str:
 def main() -> None:
     storage = MarkdownStorage()
     retrieval = RetrievalService()
+    linker = RetrievalLinker()
 
     markdown_paths = storage.list_entries()
     if not markdown_paths:
@@ -91,6 +93,11 @@ def main() -> None:
         retrieval.upsert_entry(entry)
         print(f"- Reindexed {entry.id}: {entry.title}")
 
+    relink_stats = linker.relink_all()
+    print(
+        f"Relinked wiki pages for {relink_stats['processed_entries']} entries "
+        f"and updated {relink_stats['updated_pages']} markdown files."
+    )
     print("Reindex complete.")
 
 

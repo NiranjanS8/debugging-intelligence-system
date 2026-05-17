@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.models.debug_entry import DebugEntry
+from app.models.query import QueryResult
 from app.retrieval.service import RetrievalService
 
 
@@ -39,3 +40,118 @@ def test_retrieval_parses_metadata_lists_and_scalars(monkeypatch) -> None:
     assert entry.tags == ["react", "undefined-error"]
     assert entry.related_ids == ["x1", "x2"]
     assert entry.markdown_path == "frontend/typeerror-error.md"
+
+
+def test_hybrid_search_combines_semantic_and_lexical_scores(monkeypatch) -> None:
+    class DummyStore:
+        def __init__(self):
+            pass
+
+    class DummyEmbeddingService:
+        pass
+
+    monkeypatch.setattr("app.retrieval.service.ChromaStore", DummyStore)
+    monkeypatch.setattr("app.retrieval.service.EmbeddingService", DummyEmbeddingService)
+
+    service = RetrievalService()
+
+    monkeypatch.setattr(
+        service,
+        "semantic_search",
+        lambda query, top_k=5, where=None: [
+            QueryResult(
+                id="a",
+                title="React CORS error",
+                symptoms=["request blocked"],
+                root_cause="cors misconfiguration",
+                fix="allow localhost",
+                tags=["cors"],
+                tech_stack=["react", "fastapi"],
+                confidence=0.8,
+                similarity_score=0.7,
+                related_ids=["x"],
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        service,
+        "list_entries",
+        lambda category=None: [
+            DebugEntry(
+                id="a",
+                title="React CORS error",
+                symptoms=["request blocked"],
+                root_cause="cors misconfiguration",
+                fix="allow localhost",
+                tags=["cors"],
+                tech_stack=["react", "fastapi"],
+                confidence=0.8,
+                related_ids=["x"],
+            ),
+            DebugEntry(
+                id="b",
+                title="CORS issue in local dev",
+                symptoms=["browser blocked request"],
+                root_cause="missing middleware",
+                fix="configure cors",
+                tags=["cors"],
+                tech_stack=["react"],
+                confidence=0.7,
+            ),
+        ],
+    )
+
+    results = service.hybrid_search("react cors blocked request", top_k=2)
+
+    assert len(results) == 2
+    assert results[0].id == "a"
+    assert results[0].similarity_score > 0.7
+    assert results[1].id == "b"
+
+
+def test_hybrid_search_respects_metadata_filters(monkeypatch) -> None:
+    class DummyStore:
+        def __init__(self):
+            pass
+
+    class DummyEmbeddingService:
+        pass
+
+    monkeypatch.setattr("app.retrieval.service.ChromaStore", DummyStore)
+    monkeypatch.setattr("app.retrieval.service.EmbeddingService", DummyEmbeddingService)
+
+    service = RetrievalService()
+    monkeypatch.setattr(service, "semantic_search", lambda query, top_k=5, where=None: [])
+    monkeypatch.setattr(
+        service,
+        "list_entries",
+        lambda category=None: [
+            DebugEntry(
+                id="a",
+                title="React issue",
+                root_cause="binding",
+                fix="arrow function",
+                tags=["react"],
+                tech_stack=["react"],
+                confidence=0.6,
+            ),
+            DebugEntry(
+                id="b",
+                title="Spring issue",
+                root_cause="null check missing",
+                fix="guard clause",
+                tags=["backend"],
+                tech_stack=["spring"],
+                confidence=0.6,
+            ),
+        ],
+    )
+
+    results = service.hybrid_search(
+        "react binding issue",
+        top_k=5,
+        tags=["react"],
+        tech_stack=["react"],
+    )
+
+    assert [result.id for result in results] == ["a"]

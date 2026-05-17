@@ -59,8 +59,13 @@ def test_linker_updates_related_ids(monkeypatch) -> None:
         def upsert_entry(self, value: DebugEntry) -> None:
             self.upserts.append(value.id)
 
+    class DummyGraphService:
+        def get_related_bug_ids(self, entry_id: str, limit: int = 5) -> list[str]:
+            return ["existing"]
+
     monkeypatch.setattr("app.retrieval.linker.MarkdownStorage", DummyStorage)
     monkeypatch.setattr("app.retrieval.linker.RetrievalService", DummyRetrieval)
+    monkeypatch.setattr("app.retrieval.linker.GraphService", DummyGraphService)
 
     linker = RetrievalLinker()
     related_ids = linker.link_entry(entry, similar)

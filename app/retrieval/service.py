@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from app.config import get_settings
@@ -90,6 +91,54 @@ class RetrievalService:
             ))
 
         return results
+
+    def hybrid_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        tags: list[str] | None = None,
+        tech_stack: list[str] | None = None,
+        where: dict | None = None,
+    ) -> list[QueryResult]:
+        semantic_results = self.semantic_search(
+            query=query,
+            top_k=max(top_k * 3, top_k),
+            where=where,
+        )
+        all_entries = self.list_entries()
+        query_terms = self._tokenize(query)
+
+        scored: dict[str, tuple[QueryResult, float]] = {}
+
+        for result in semantic_results:
+            if not self._matches_filters(result, tags=tags, tech_stack=tech_stack):
+                continue
+            lexical_score = self._lexical_score_for_result(result, query_terms)
+            hybrid_score = self._combine_scores(
+                semantic_score=result.similarity_score,
+                lexical_score=lexical_score,
+                graph_boost=self._graph_boost(result),
+            )
+            scored[result.id] = (self._clone_result(result, hybrid_score), hybrid_score)
+
+        for entry in all_entries:
+            candidate = self._query_result_from_entry(entry)
+            if not self._matches_filters(candidate, tags=tags, tech_stack=tech_stack):
+                continue
+            lexical_score = self._lexical_score_for_result(candidate, query_terms)
+            if lexical_score <= 0.0:
+                continue
+            hybrid_score = self._combine_scores(
+                semantic_score=0.0,
+                lexical_score=lexical_score,
+                graph_boost=self._graph_boost(candidate),
+            )
+            existing = scored.get(candidate.id)
+            if existing is None or hybrid_score > existing[1]:
+                scored[candidate.id] = (self._clone_result(candidate, hybrid_score), hybrid_score)
+
+        ranked = sorted(scored.values(), key=lambda item: item[1], reverse=True)
+        return [result for result, _ in ranked[:top_k]]
 
     def find_similar(self, entry_id: str, top_k: int = 5) -> list[SimilarEntry]:
         """Find entries similar to a given entry by its ID."""
@@ -269,6 +318,86 @@ class RetrievalService:
             related_ids=self._parse_list(metadata.get("related_ids", "")),
             markdown_path=metadata.get("markdown_path") or None,
         )
+
+    def _query_result_from_entry(self, entry: DebugEntry) -> QueryResult:
+        return QueryResult(
+            id=entry.id,
+            title=entry.title,
+            symptoms=entry.symptoms,
+            root_cause=entry.root_cause,
+            fix=entry.fix,
+            tags=entry.tags,
+            tech_stack=entry.tech_stack,
+            confidence=entry.confidence,
+            similarity_score=0.0,
+            related_ids=entry.related_ids,
+        )
+
+    def _clone_result(self, result: QueryResult, score: float) -> QueryResult:
+        return QueryResult(
+            id=result.id,
+            title=result.title,
+            symptoms=result.symptoms,
+            root_cause=result.root_cause,
+            fix=result.fix,
+            tags=result.tags,
+            tech_stack=result.tech_stack,
+            confidence=result.confidence,
+            similarity_score=round(score, 4),
+            related_ids=result.related_ids,
+        )
+
+    def _matches_filters(
+        self,
+        result: QueryResult,
+        *,
+        tags: list[str] | None = None,
+        tech_stack: list[str] | None = None,
+    ) -> bool:
+        if tags and not (set(result.tags) & {item.lower().strip() for item in tags}):
+            return False
+        if tech_stack and not (set(result.tech_stack) & {item.lower().strip() for item in tech_stack}):
+            return False
+        return True
+
+    def _lexical_score_for_result(self, result: QueryResult, query_terms: set[str]) -> float:
+        if not query_terms:
+            return 0.0
+        haystack = " ".join(
+            [
+                result.title,
+                result.root_cause,
+                result.fix,
+                " ".join(result.symptoms),
+                " ".join(result.tags),
+                " ".join(result.tech_stack),
+            ]
+        )
+        document_terms = self._tokenize(haystack)
+        if not document_terms:
+            return 0.0
+        overlap = len(query_terms & document_terms)
+        phrase_bonus = 0.15 if " ".join(sorted(query_terms)) in haystack.lower() else 0.0
+        return min(1.0, overlap / max(len(query_terms), 1) + phrase_bonus)
+
+    def _combine_scores(
+        self,
+        *,
+        semantic_score: float,
+        lexical_score: float,
+        graph_boost: float = 0.0,
+    ) -> float:
+        return min(1.0, semantic_score * 0.65 + lexical_score * 0.35 + graph_boost)
+
+    def _graph_boost(self, result: QueryResult) -> float:
+        return min(0.05, len(result.related_ids) * 0.01)
+
+    def _tokenize(self, text: str) -> set[str]:
+        return {
+            token
+            for token in re.findall(r"[a-z0-9]+", text.lower())
+            if len(token) > 1
+        }
 
     def _is_same_entry(
         self,

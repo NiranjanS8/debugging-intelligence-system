@@ -24,13 +24,12 @@ def _get_service() -> RetrievalService:
 @router.post("/query", response_model=DebugQueryResponse)
 async def query_debug_entries(request: DebugQueryRequest) -> DebugQueryResponse:
     try:
-        # Build ChromaDB where filter from optional fields
-        where = _build_where_filter(request)
-
-        results = _get_service().semantic_search(
+        results = _get_service().hybrid_search(
             query=request.query,
             top_k=request.top_k,
-            where=where,
+            tags=request.tags,
+            tech_stack=request.tech_stack,
+            where=_build_where_filter(request),
         )
 
         # Apply confidence filter in-memory (simpler than ChromaDB compound where)

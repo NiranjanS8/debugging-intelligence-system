@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     default_top_k: int = Field(default=5, ge=1, le=50)
     similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
     deduplication_threshold: float = Field(default=0.92, ge=0.0, le=1.0)
+    wiki_link_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    wiki_max_links: int = Field(default=5, ge=1, le=20)
 
     cluster_distance_threshold: float = Field(default=1.0, gt=0.0)
     min_cluster_size: int = Field(default=2, ge=2)

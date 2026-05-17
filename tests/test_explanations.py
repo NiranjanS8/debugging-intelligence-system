@@ -8,7 +8,7 @@ def test_explanation_service_builds_sources_and_graph_context(monkeypatch) -> No
     from app.explanations.service import DebugExplanationService
 
     class DummyRetrievalService:
-        def semantic_search(self, query: str, top_k: int = 5, where=None):
+        def hybrid_search(self, query: str, top_k: int = 5, tags=None, tech_stack=None, where=None):
             return [
                 QueryResult(
                     id="bug-1",

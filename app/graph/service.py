@@ -126,6 +126,19 @@ class GraphService:
             graph_enabled=True,
         )
 
+    def get_related_bug_ids(self, entry_id: str, limit: int = 5) -> list[str]:
+        if not self.enabled:
+            return []
+
+        query = """
+        MATCH (:Bug {id: $entry_id})-[rel:SIMILAR_TO]->(b:Bug)
+        RETURN b.id AS id
+        ORDER BY rel.score DESC
+        LIMIT $limit
+        """
+        rows = self.store.run(query, {"entry_id": entry_id, "limit": limit})
+        return [str(row["id"]) for row in rows if row.get("id")]
+
     def _upsert_bug(self, entry: DebugEntry) -> None:
         query = """
         MERGE (b:Bug {id: $id})
