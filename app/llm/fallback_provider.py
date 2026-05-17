@@ -5,6 +5,7 @@ import json
 
 from app.llm.base import BaseLLMProvider
 from app.models.debug_entry import StructuredDebugData
+from app.models.explanation import DebugExplanationResponse
 from app.utils.text_processing import extract_error_type
 from app.utils.logger import get_logger
 
@@ -58,6 +59,37 @@ class FallbackProvider(BaseLLMProvider):
 
     async def health_check(self) -> bool:
         return True
+
+    async def explain_debug_issue(
+        self,
+        raw_text: str,
+        retrieval_context: str,
+    ) -> DebugExplanationResponse:
+        structured = await self.structure_debug_input(raw_text)
+        supporting_titles = self._extract_supporting_titles(retrieval_context)
+        summary = (
+            f"{structured.title}: likely caused by {structured.root_cause}. "
+            f"Retrieved knowledge suggests similar incidents have been solved with related fixes."
+            if supporting_titles
+            else f"{structured.title}: likely caused by {structured.root_cause}."
+        )
+        reasoning = (
+            f"The explanation is based on the observed symptoms ({', '.join(structured.symptoms)}) "
+            f"and the retrieved historical context. {retrieval_context[:400]}".strip()
+        )
+        next_steps = [
+            structured.fix,
+            "Compare the current incident with the supporting entries.",
+            "Verify the fix in the affected environment and add any new findings back to the KB.",
+        ]
+        return DebugExplanationResponse(
+            summary=summary,
+            probable_root_cause=structured.root_cause,
+            recommended_fix=structured.fix,
+            reasoning=reasoning,
+            confidence=min(0.85, max(0.35, structured.confidence + (0.1 if supporting_titles else 0.0))),
+            next_steps=next_steps,
+        )
 
     def _extract_title(self, lines: list[str], error_type: str | None) -> str:
         if error_type:
@@ -134,3 +166,6 @@ class FallbackProvider(BaseLLMProvider):
                 tags.append(tag)
 
         return tags or ["untagged"]
+
+    def _extract_supporting_titles(self, retrieval_context: str) -> list[str]:
+        return [line for line in retrieval_context.splitlines() if line.startswith("Title: ")]

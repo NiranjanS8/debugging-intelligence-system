@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from app.models.debug_entry import StructuredDebugData
+from app.models.explanation import DebugExplanationResponse
 
 
 class BaseLLMProvider(ABC):
@@ -16,4 +17,13 @@ class BaseLLMProvider(ABC):
     @abstractmethod
     async def health_check(self) -> bool:
         """Return True if the provider is reachable and configured."""
+        ...
+
+    @abstractmethod
+    async def explain_debug_issue(
+        self,
+        raw_text: str,
+        retrieval_context: str,
+    ) -> DebugExplanationResponse:
+        """Generate a grounded debug explanation using retrieved context."""
         ...

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.models.analytics import AnalyticsSummary, ClusterInfo, ClusterResponse, FailurePatternResponse, PatternStat
 from app.models.debug_entry import DebugEntry, DebugEntryResponse, DuplicateCandidate, SimilarEntry
+from app.models.explanation import DebugExplanationResponse, ExplanationSource
 from main import create_app
 
 
@@ -157,3 +158,43 @@ def test_debug_add_flags_semantic_duplicate() -> None:
     assert payload["duplicate_of"] == "existing111"
     assert payload["duplicate_entry"]["similarity_score"] == 0.96
     assert payload["message"] == "Likely semantic duplicate detected."
+
+
+def test_debug_explain_returns_grounded_response() -> None:
+    from app.api import explanation_routes
+
+    class DummyExplanationService:
+        async def explain(self, request) -> DebugExplanationResponse:
+            return DebugExplanationResponse(
+                summary="This looks like a CORS configuration issue.",
+                probable_root_cause="Missing or incorrect CORS middleware configuration.",
+                recommended_fix="Allow the frontend origin in the backend CORS settings.",
+                reasoning="The retrieved incidents show the same symptom and were resolved by aligning allowed origins.",
+                confidence=0.86,
+                next_steps=["Check allowed origins.", "Retry the failing request."],
+                supporting_entries=[
+                    ExplanationSource(
+                        id="cors-1",
+                        title="Local dev CORS error",
+                        similarity_score=0.93,
+                        root_cause="cors misconfiguration",
+                        fix="allow localhost origin",
+                    )
+                ],
+                graph_context_used=True,
+                graph_observations=["cors-1 -[HAS_ROOT_CAUSE]-> cors misconfiguration"],
+            )
+
+    explanation_routes._service = DummyExplanationService()
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/debug/explain",
+        json={"raw_input": "CORS error blocked by access-control-allow-origin", "top_k": 3},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["probable_root_cause"] == "Missing or incorrect CORS middleware configuration."
+    assert payload["supporting_entries"][0]["id"] == "cors-1"
+    assert payload["graph_context_used"] is True

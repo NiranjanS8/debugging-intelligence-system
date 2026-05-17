@@ -7,6 +7,7 @@ from openai import AsyncOpenAI
 from app.config import get_settings
 from app.llm.base import BaseLLMProvider
 from app.models.debug_entry import StructuredDebugData
+from app.models.explanation import DebugExplanationResponse
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,6 +34,20 @@ Rules:
 - tech_stack: lowercase technology names
 - confidence: how confident you are in the structuring (0.0-1.0)
 - Return raw JSON only, no markdown fences, no explanation"""
+
+_EXPLAIN_PROMPT = """You are a debugging explanation engine.
+
+Use the provided retrieval context as grounding evidence. Do not invent sources.
+Return ONLY valid JSON with this schema:
+{
+  "summary": "short explanation",
+  "probable_root_cause": "likely underlying cause",
+  "recommended_fix": "most likely next fix",
+  "reasoning": "why you think this, grounded in the retrieved evidence",
+  "confidence": 0.0,
+  "next_steps": ["step 1", "step 2"]
+}
+"""
 
 
 class OpenAIProvider(BaseLLMProvider):
@@ -64,3 +79,26 @@ class OpenAIProvider(BaseLLMProvider):
             return bool(settings.openai_api_key)
         except Exception:
             return False
+
+    async def explain_debug_issue(
+        self,
+        raw_text: str,
+        retrieval_context: str,
+    ) -> DebugExplanationResponse:
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": _EXPLAIN_PROMPT},
+                {
+                    "role": "user",
+                    "content": (
+                        f"Raw debugging input:\n{raw_text}\n\n"
+                        f"Retrieved context:\n{retrieval_context}"
+                    ),
+                },
+            ],
+            temperature=0.2,
+            response_format={"type": "json_object"},
+        )
+        data = json.loads(response.choices[0].message.content.strip())
+        return DebugExplanationResponse(**data)

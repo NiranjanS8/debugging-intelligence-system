@@ -7,6 +7,7 @@ from google import genai
 from app.config import get_settings
 from app.llm.base import BaseLLMProvider
 from app.models.debug_entry import StructuredDebugData
+from app.models.explanation import DebugExplanationResponse
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -33,6 +34,20 @@ Rules:
 - tech_stack: lowercase technology names
 - confidence: how confident you are in the structuring (0.0-1.0)
 - Return raw JSON only, no markdown fences, no explanation"""
+
+_EXPLAIN_PROMPT = """You are a debugging explanation engine.
+
+Use the provided retrieval context as grounding evidence. Do not invent sources.
+Return ONLY valid JSON with this schema:
+{
+  "summary": "short explanation",
+  "probable_root_cause": "likely underlying cause",
+  "recommended_fix": "most likely next fix",
+  "reasoning": "why you think this, grounded in the retrieved evidence",
+  "confidence": 0.0,
+  "next_steps": ["step 1", "step 2"]
+}
+"""
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -64,3 +79,23 @@ class GeminiProvider(BaseLLMProvider):
             return bool(settings.gemini_api_key)
         except Exception:
             return False
+
+    async def explain_debug_issue(
+        self,
+        raw_text: str,
+        retrieval_context: str,
+    ) -> DebugExplanationResponse:
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=(
+                f"{_EXPLAIN_PROMPT}\n\n"
+                f"Raw debugging input:\n{raw_text}\n\n"
+                f"Retrieved context:\n{retrieval_context}"
+            ),
+        )
+        raw_json = response.text.strip()
+        if raw_json.startswith("```"):
+            raw_json = raw_json.split("\n", 1)[1]
+            raw_json = raw_json.rsplit("```", 1)[0]
+        data = json.loads(raw_json)
+        return DebugExplanationResponse(**data)
