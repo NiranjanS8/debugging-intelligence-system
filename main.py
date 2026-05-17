@@ -61,7 +61,9 @@ def create_app() -> FastAPI:
 
     # Routes
     from app.api.debug_routes import router as debug_router
+    from app.api.query_routes import router as query_router
     app.include_router(debug_router)
+    app.include_router(query_router)
 
     return app
 

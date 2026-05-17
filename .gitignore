@@ -47,3 +47,4 @@ coverage.xml
 # Misc
 *.log
 implementation_plan.md
+graphify-out/*
