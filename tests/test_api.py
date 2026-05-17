@@ -74,10 +74,11 @@ def test_analytics_and_knowledge_routes(monkeypatch) -> None:
 
 def test_debug_add_returns_similar_bug_suggestions(monkeypatch) -> None:
     from app.api import debug_routes
+    from app.ingestion.service import PreparedIngestion
 
     class DummyIngestionService:
-        async def ingest(self, raw_input: str) -> DebugEntryResponse:
-            return DebugEntryResponse(
+        async def prepare_ingest(self, raw_input: str) -> PreparedIngestion:
+            response = DebugEntryResponse(
                 entry=DebugEntry(
                     id="new123",
                     title="TypeError Error",
@@ -97,7 +98,13 @@ def test_debug_add_returns_similar_bug_suggestions(monkeypatch) -> None:
                         tags=["react", "undefined-error"],
                     )
                 ],
+                projection_task_id="task123",
+                projection_status="queued",
             )
+            return PreparedIngestion(response=response, similar_entries=response.similar_entries)
+
+        def process_projection_task(self, task_id: str) -> bool:
+            return True
 
     debug_routes._service = DummyIngestionService()
 
@@ -113,14 +120,17 @@ def test_debug_add_returns_similar_bug_suggestions(monkeypatch) -> None:
     assert len(payload["similar_entries"]) == 1
     assert payload["similar_entries"][0]["id"] == "old456"
     assert payload["similar_entries"][0]["similarity_score"] == 0.91
+    assert payload["projection_task_id"] == "task123"
+    assert payload["projection_status"] == "queued"
 
 
 def test_debug_add_flags_semantic_duplicate() -> None:
     from app.api import debug_routes
+    from app.ingestion.service import PreparedIngestion
 
     class DummyIngestionService:
-        async def ingest(self, raw_input: str) -> DebugEntryResponse:
-            return DebugEntryResponse(
+        async def prepare_ingest(self, raw_input: str) -> PreparedIngestion:
+            response = DebugEntryResponse(
                 entry=DebugEntry(
                     id="new999",
                     title="CORS Error",
@@ -141,8 +151,14 @@ def test_debug_add_flags_semantic_duplicate() -> None:
                     tags=["cors"],
                     tech_stack=["react", "fastapi"],
                 ),
+                projection_task_id="task999",
+                projection_status="queued",
                 message="Likely semantic duplicate detected.",
             )
+            return PreparedIngestion(response=response, similar_entries=[])
+
+        def process_projection_task(self, task_id: str) -> bool:
+            return True
 
     debug_routes._service = DummyIngestionService()
 
@@ -157,7 +173,8 @@ def test_debug_add_flags_semantic_duplicate() -> None:
     assert payload["is_duplicate"] is True
     assert payload["duplicate_of"] == "existing111"
     assert payload["duplicate_entry"]["similarity_score"] == 0.96
-    assert payload["message"] == "Likely semantic duplicate detected."
+    assert payload["projection_task_id"] == "task999"
+    assert payload["projection_status"] == "queued"
 
 
 def test_debug_explain_returns_grounded_response() -> None:

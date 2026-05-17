@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     chroma_collection_name: str = "debug_knowledge"
 
     knowledge_base_dir: str = "./knowledge_base"
+    projection_queue_dir: str = "./projection_queue"
 
     neo4j_enabled: bool = False
     neo4j_uri: str = "bolt://localhost:7687"
@@ -74,6 +75,10 @@ class Settings(BaseSettings):
     @property
     def knowledge_base_path(self) -> Path:
         return Path(self.knowledge_base_dir).resolve()
+
+    @property
+    def projection_queue_path(self) -> Path:
+        return Path(self.projection_queue_dir).resolve()
 
     @field_validator("log_level")
     @classmethod

@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.projections.service import ProjectionService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -20,6 +21,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     for subdir in ("frontend", "backend", "infra", "uncategorized"):
         (settings.knowledge_base_path / subdir).mkdir(parents=True, exist_ok=True)
     settings.chroma_persist_path.mkdir(parents=True, exist_ok=True)
+    settings.projection_queue_path.mkdir(parents=True, exist_ok=True)
+
+    projection_stats = ProjectionService().process_pending(limit=100)
+    logger.info(
+        "Recovered queued projections",
+        extra={"operation": "startup", **projection_stats},
+    )
 
     logger.info("DIS is ready", extra={"operation": "startup"})
     yield

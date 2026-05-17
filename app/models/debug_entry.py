@@ -90,4 +90,6 @@ class DebugEntryResponse(BaseModel):
     is_duplicate: bool = False
     duplicate_of: str | None = None
     duplicate_entry: DuplicateCandidate | None = None
+    projection_task_id: str | None = None
+    projection_status: str = "queued"
     message: str = "Debug entry processed successfully."
