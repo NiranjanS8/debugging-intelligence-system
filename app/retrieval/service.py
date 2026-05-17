@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.config import get_settings
 from app.embeddings.service import EmbeddingService
 from app.retrieval.chroma_store import ChromaStore
-from app.models.debug_entry import DebugEntry, SimilarEntry
+from app.models.debug_entry import DebugEntry, DuplicateCandidate, SimilarEntry
 from app.models.query import QueryResult
 from app.utils.text_processing import build_embedding_document
 from app.utils.logger import get_logger
@@ -14,6 +15,7 @@ logger = get_logger(__name__)
 
 class RetrievalService:
     def __init__(self):
+        self.settings = get_settings()
         self.store = ChromaStore()
         self.embedding_service = EmbeddingService()
 
@@ -119,6 +121,50 @@ class RetrievalService:
 
         return results[:top_k]
 
+    def find_duplicate_candidate(
+        self,
+        *,
+        title: str,
+        root_cause: str,
+        fix: str,
+        symptoms: list[str],
+        tags: list[str],
+        tech_stack: list[str] | None = None,
+    ) -> DuplicateCandidate | None:
+        if self.store.count() == 0:
+            return None
+
+        query_embedding = self.embedding_service.generate(
+            title=title,
+            root_cause=root_cause,
+            fix=fix,
+            symptoms=symptoms,
+            tags=tags,
+        )
+        raw = self.store.query(query_embedding, top_k=1)
+        if not raw["ids"] or not raw["ids"][0]:
+            return None
+
+        meta = raw["metadatas"][0][0] if raw["metadatas"] else {}
+        distance = raw["distances"][0][0] if raw["distances"] else 1.0
+        similarity = max(0.0, 1.0 - distance)
+        if similarity < self.settings.deduplication_threshold:
+            return None
+
+        candidate = DuplicateCandidate(
+            id=raw["ids"][0][0],
+            title=meta.get("title", ""),
+            root_cause=meta.get("root_cause", ""),
+            fix=meta.get("fix", ""),
+            similarity_score=round(similarity, 4),
+            tags=self._parse_list(meta.get("tags", "")),
+            tech_stack=self._parse_list(meta.get("tech_stack", "")),
+        )
+
+        if self._is_same_entry(candidate, title, root_cause, tech_stack or []):
+            return candidate
+        return None
+
     def get_entry(self, entry_id: str) -> DebugEntry | None:
         stored = self.store.get_by_id(entry_id)
         if stored is None:
@@ -223,3 +269,15 @@ class RetrievalService:
             related_ids=self._parse_list(metadata.get("related_ids", "")),
             markdown_path=metadata.get("markdown_path") or None,
         )
+
+    def _is_same_entry(
+        self,
+        candidate: DuplicateCandidate,
+        title: str,
+        root_cause: str,
+        tech_stack: list[str],
+    ) -> bool:
+        same_root_cause = candidate.root_cause.strip().lower() == root_cause.strip().lower()
+        shared_tech = bool(set(candidate.tech_stack) & {item.strip().lower() for item in tech_stack})
+        title_overlap = candidate.title.strip().lower() == title.strip().lower()
+        return same_root_cause or shared_tech or title_overlap

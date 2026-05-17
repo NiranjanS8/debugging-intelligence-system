@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.models.analytics import AnalyticsSummary, ClusterInfo, ClusterResponse, FailurePatternResponse, PatternStat
-from app.models.debug_entry import DebugEntry, DebugEntryResponse, SimilarEntry
+from app.models.debug_entry import DebugEntry, DebugEntryResponse, DuplicateCandidate, SimilarEntry
 from main import create_app
 
 
@@ -112,3 +112,48 @@ def test_debug_add_returns_similar_bug_suggestions(monkeypatch) -> None:
     assert len(payload["similar_entries"]) == 1
     assert payload["similar_entries"][0]["id"] == "old456"
     assert payload["similar_entries"][0]["similarity_score"] == 0.91
+
+
+def test_debug_add_flags_semantic_duplicate() -> None:
+    from app.api import debug_routes
+
+    class DummyIngestionService:
+        async def ingest(self, raw_input: str) -> DebugEntryResponse:
+            return DebugEntryResponse(
+                entry=DebugEntry(
+                    id="new999",
+                    title="CORS Error",
+                    root_cause="cors misconfiguration",
+                    fix="add middleware",
+                    tags=["cors"],
+                    tech_stack=["react", "fastapi"],
+                    category="frontend",
+                ),
+                is_duplicate=True,
+                duplicate_of="existing111",
+                duplicate_entry=DuplicateCandidate(
+                    id="existing111",
+                    title="CORS issue in local dev",
+                    root_cause="cors misconfiguration",
+                    fix="allow frontend origin",
+                    similarity_score=0.96,
+                    tags=["cors"],
+                    tech_stack=["react", "fastapi"],
+                ),
+                message="Likely semantic duplicate detected.",
+            )
+
+    debug_routes._service = DummyIngestionService()
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/debug/add",
+        json={"raw_input": "CORS error blocked by access-control-allow-origin\nFix: add middleware"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_duplicate"] is True
+    assert payload["duplicate_of"] == "existing111"
+    assert payload["duplicate_entry"]["similarity_score"] == 0.96
+    assert payload["message"] == "Likely semantic duplicate detected."

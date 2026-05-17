@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from app.graph.service import GraphService
 from app.ingestion.parser import DebugInputParser
 from app.ingestion.structurer import DebugStructurer
@@ -32,6 +34,15 @@ class IngestionService:
 
         entry_id = generate_entry_id(structured.title, structured.root_cause)
         category = infer_category(structured.tech_stack, structured.tags)
+        duplicate = self.retrieval.find_duplicate_candidate(
+            title=structured.title,
+            root_cause=structured.root_cause,
+            fix=structured.fix,
+            symptoms=structured.symptoms,
+            tags=structured.tags,
+            tech_stack=structured.tech_stack,
+        )
+        now = datetime.now(timezone.utc)
 
         markdown_content = self.md_generator.generate(structured)
         md_path = self.md_storage.save(
@@ -52,6 +63,8 @@ class IngestionService:
             confidence=structured.confidence,
             raw_input=raw_input,
             category=category,
+            created_at=now,
+            updated_at=now,
             markdown_path=md_path,
         )
 
@@ -65,7 +78,23 @@ class IngestionService:
 
         logger.info(
             f"Ingested: {entry.title}",
-            extra={"entry_id": entry_id, "operation": "ingest"},
+            extra={
+                "entry_id": entry_id,
+                "operation": "ingest",
+                "is_duplicate": duplicate is not None,
+                "duplicate_of": duplicate.id if duplicate else None,
+            },
         )
 
-        return DebugEntryResponse(entry=entry, similar_entries=similar)
+        return DebugEntryResponse(
+            entry=entry,
+            similar_entries=similar,
+            is_duplicate=duplicate is not None,
+            duplicate_of=duplicate.id if duplicate else None,
+            duplicate_entry=duplicate,
+            message=(
+                "Likely semantic duplicate detected."
+                if duplicate is not None
+                else "Debug entry processed successfully."
+            ),
+        )

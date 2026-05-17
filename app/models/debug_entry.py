@@ -74,7 +74,20 @@ class SimilarEntry(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class DuplicateCandidate(BaseModel):
+    id: str
+    title: str
+    root_cause: str
+    fix: str
+    similarity_score: float = Field(..., ge=0.0, le=1.0)
+    tags: list[str] = Field(default_factory=list)
+    tech_stack: list[str] = Field(default_factory=list)
+
+
 class DebugEntryResponse(BaseModel):
     entry: DebugEntry
     similar_entries: list[SimilarEntry] = Field(default_factory=list)
+    is_duplicate: bool = False
+    duplicate_of: str | None = None
+    duplicate_entry: DuplicateCandidate | None = None
     message: str = "Debug entry processed successfully."
