@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.graph.service import GraphService
 from app.ingestion.parser import DebugInputParser
 from app.ingestion.structurer import DebugStructurer
 from app.llm.factory import get_llm_provider
@@ -23,6 +24,7 @@ class IngestionService:
         self.md_storage = MarkdownStorage()
         self.retrieval = RetrievalService()
         self.linker = RetrievalLinker()
+        self.graph = GraphService()
 
     async def ingest(self, raw_input: str) -> DebugEntryResponse:
         parsed = self.parser.parse(raw_input)
@@ -59,6 +61,7 @@ class IngestionService:
         # Find similar entries to return as suggestions
         similar = self.retrieval.find_similar(entry_id, top_k=3)
         self.linker.link_entry(entry, similar)
+        self.graph.sync_entry(entry, similar)
 
         logger.info(
             f"Ingested: {entry.title}",

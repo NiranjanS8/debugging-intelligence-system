@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from app.models.analytics import AnalyticsSummary, ClusterInfo, ClusterResponse, FailurePatternResponse, PatternStat
+from app.models.debug_entry import DebugEntry, DebugEntryResponse, SimilarEntry
 from main import create_app
 
 
@@ -68,3 +69,46 @@ def test_analytics_and_knowledge_routes(monkeypatch) -> None:
     knowledge_list = client.get("/knowledge/list")
     assert knowledge_list.status_code == 200
     assert knowledge_list.json()["total_entries"] == 0
+
+
+def test_debug_add_returns_similar_bug_suggestions(monkeypatch) -> None:
+    from app.api import debug_routes
+
+    class DummyIngestionService:
+        async def ingest(self, raw_input: str) -> DebugEntryResponse:
+            return DebugEntryResponse(
+                entry=DebugEntry(
+                    id="new123",
+                    title="TypeError Error",
+                    root_cause="incorrect handler binding",
+                    fix="use an arrow function",
+                    tags=["react"],
+                    tech_stack=["react", "javascript"],
+                    category="frontend",
+                ),
+                similar_entries=[
+                    SimilarEntry(
+                        id="old456",
+                        title="Undefined handler in React",
+                        root_cause="method was not bound to component instance",
+                        fix="bind in constructor or use an arrow function",
+                        similarity_score=0.91,
+                        tags=["react", "undefined-error"],
+                    )
+                ],
+            )
+
+    debug_routes._service = DummyIngestionService()
+
+    client = TestClient(create_app())
+    response = client.post(
+        "/debug/add",
+        json={"raw_input": "TypeError: undefined is not a function\nFix: use arrow function"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entry"]["id"] == "new123"
+    assert len(payload["similar_entries"]) == 1
+    assert payload["similar_entries"][0]["id"] == "old456"
+    assert payload["similar_entries"][0]["similarity_score"] == 0.91

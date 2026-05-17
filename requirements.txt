@@ -9,6 +9,7 @@ openai==1.82.0
 sentence-transformers==3.4.1
 
 chromadb==1.5.9
+neo4j==5.28.1
 
 scikit-learn==1.6.1
 numpy==2.2.3

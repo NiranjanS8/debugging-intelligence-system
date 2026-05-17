@@ -49,6 +49,12 @@ class Settings(BaseSettings):
 
     knowledge_base_dir: str = "./knowledge_base"
 
+    neo4j_enabled: bool = False
+    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = ""
+    neo4j_database: str = "neo4j"
+
     default_top_k: int = Field(default=5, ge=1, le=50)
     similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
 
