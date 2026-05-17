@@ -48,3 +48,5 @@ coverage.xml
 *.log
 implementation_plan.md
 graphify-out/*
+INTERVIEW_QA.md
+.gitignore

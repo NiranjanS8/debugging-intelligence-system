@@ -93,6 +93,9 @@ def main() -> None:
         retrieval.upsert_entry(entry)
         print(f"- Reindexed {entry.id}: {entry.title}")
 
+    retrieval.rebuild_search_index()
+    print("Rebuilt BM25 search index.")
+
     relink_stats = linker.relink_all()
     print(
         f"Relinked wiki pages for {relink_stats['processed_entries']} entries "

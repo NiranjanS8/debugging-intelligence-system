@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     knowledge_base_dir: str = "./knowledge_base"
     projection_queue_dir: str = "./projection_queue"
+    search_index_dir: str = "./search_index"
 
     neo4j_enabled: bool = False
     neo4j_uri: str = "bolt://localhost:7687"
@@ -79,6 +80,10 @@ class Settings(BaseSettings):
     @property
     def projection_queue_path(self) -> Path:
         return Path(self.projection_queue_dir).resolve()
+
+    @property
+    def search_index_path(self) -> Path:
+        return Path(self.search_index_dir).resolve()
 
     @field_validator("log_level")
     @classmethod

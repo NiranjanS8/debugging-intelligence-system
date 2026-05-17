@@ -47,10 +47,18 @@ def test_hybrid_search_combines_semantic_and_lexical_scores(monkeypatch) -> None
         def __init__(self):
             pass
 
+    class DummySearchIndex:
+        def search(self, query: str, top_k: int = 10, tags=None, tech_stack=None) -> list[dict]:
+            return [
+                {"id": "a", "score": 0.8, "document": {}},
+                {"id": "b", "score": 0.7, "document": {}},
+            ]
+
     class DummyEmbeddingService:
         pass
 
     monkeypatch.setattr("app.retrieval.service.ChromaStore", DummyStore)
+    monkeypatch.setattr("app.retrieval.service.SearchIndex", DummySearchIndex)
     monkeypatch.setattr("app.retrieval.service.EmbeddingService", DummyEmbeddingService)
 
     service = RetrievalService()
@@ -114,10 +122,18 @@ def test_hybrid_search_respects_metadata_filters(monkeypatch) -> None:
         def __init__(self):
             pass
 
+    class DummySearchIndex:
+        def search(self, query: str, top_k: int = 10, tags=None, tech_stack=None) -> list[dict]:
+            return [
+                {"id": "a", "score": 0.9, "document": {}},
+                {"id": "b", "score": 0.8, "document": {}},
+            ]
+
     class DummyEmbeddingService:
         pass
 
     monkeypatch.setattr("app.retrieval.service.ChromaStore", DummyStore)
+    monkeypatch.setattr("app.retrieval.service.SearchIndex", DummySearchIndex)
     monkeypatch.setattr("app.retrieval.service.EmbeddingService", DummyEmbeddingService)
 
     service = RetrievalService()
@@ -155,3 +171,38 @@ def test_hybrid_search_respects_metadata_filters(monkeypatch) -> None:
     )
 
     assert [result.id for result in results] == ["a"]
+
+
+def test_index_entry_updates_bm25_index(monkeypatch) -> None:
+    calls: list[str] = []
+
+    class DummyStore:
+        def upsert(self, entry_id: str, embedding: list[float], metadata: dict, document: str) -> None:
+            calls.append("vector")
+
+    class DummySearchIndex:
+        def index_entry(self, entry: DebugEntry) -> None:
+            calls.append("lexical")
+
+    class DummyEmbeddingService:
+        def generate(self, title: str, root_cause: str, fix: str, symptoms: list[str], tags=None) -> list[float]:
+            return [0.1, 0.2]
+
+    monkeypatch.setattr("app.retrieval.service.ChromaStore", DummyStore)
+    monkeypatch.setattr("app.retrieval.service.SearchIndex", DummySearchIndex)
+    monkeypatch.setattr("app.retrieval.service.EmbeddingService", DummyEmbeddingService)
+
+    service = RetrievalService()
+    service.index_entry(
+        DebugEntry(
+            id="abc",
+            title="React Error",
+            root_cause="bad binding",
+            fix="use arrow function",
+            symptoms=["crash"],
+            tags=["react"],
+            tech_stack=["react"],
+        )
+    )
+
+    assert calls == ["vector", "lexical"]
