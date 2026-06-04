@@ -27,3 +27,12 @@ class BaseLLMProvider(ABC):
     ) -> DebugExplanationResponse:
         """Generate a grounded debug explanation using retrieved context."""
         ...
+
+    @abstractmethod
+    async def chat_debug_issue(
+        self,
+        messages: list[dict[str, str]],
+        retrieval_context: str,
+    ) -> str:
+        """Generate the next turn of a debug chat using conversation history and retrieval context."""
+        ...

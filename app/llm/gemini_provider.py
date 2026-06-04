@@ -99,3 +99,40 @@ class GeminiProvider(BaseLLMProvider):
             raw_json = raw_json.rsplit("```", 1)[0]
         data = json.loads(raw_json)
         return DebugExplanationResponse(**data)
+
+    async def chat_debug_issue(
+        self,
+        messages: list[dict[str, str]],
+        retrieval_context: str,
+    ) -> str:
+        logger.info("Chatting via Gemini", extra={"operation": "llm_call"})
+        from google.genai import types
+
+        system_instruction = (
+            "You are a debugging assistant helping a developer fix a software issue.\n"
+            "Use the following retrieved context as grounding evidence:\n"
+            f"{retrieval_context}\n\n"
+            "Be concise, helpful, and ground your advice in the retrieved context if possible."
+        )
+
+        contents = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            contents.append(
+                types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg["content"])]
+                )
+            )
+
+        config = types.GenerateContentConfig(
+            system_instruction=system_instruction,
+            temperature=0.4,
+        )
+
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=contents,
+            config=config,
+        )
+        return response.text.strip()

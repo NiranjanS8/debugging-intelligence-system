@@ -102,3 +102,28 @@ class OpenAIProvider(BaseLLMProvider):
         )
         data = json.loads(response.choices[0].message.content.strip())
         return DebugExplanationResponse(**data)
+
+    async def chat_debug_issue(
+        self,
+        messages: list[dict[str, str]],
+        retrieval_context: str,
+    ) -> str:
+        logger.info("Chatting via OpenAI", extra={"operation": "llm_call"})
+        system_prompt = (
+            "You are a debugging assistant helping a developer fix a software issue.\n"
+            "Use the following retrieved context as grounding evidence:\n"
+            f"{retrieval_context}\n\n"
+            "Be concise, helpful, and ground your advice in the retrieved context if possible."
+        )
+
+        api_messages = [{"role": "system", "content": system_prompt}]
+        for msg in messages:
+            role = "assistant" if msg["role"] == "assistant" else "user"
+            api_messages.append({"role": role, "content": msg["content"]})
+
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=api_messages,
+            temperature=0.4,
+        )
+        return response.choices[0].message.content.strip()

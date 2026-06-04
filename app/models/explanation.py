@@ -30,3 +30,18 @@ class DebugExplanationResponse(BaseModel):
     graph_context_used: bool = False
     graph_observations: list[str] = Field(default_factory=list)
     message: str = "Debug explanation generated successfully."
+
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class DebugChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    retrieval_context: str
+
+
+class DebugChatResponse(BaseModel):
+    reply: str
+    message: str = "Reply generated successfully."

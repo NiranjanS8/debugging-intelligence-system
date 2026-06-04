@@ -169,3 +169,15 @@ class FallbackProvider(BaseLLMProvider):
 
     def _extract_supporting_titles(self, retrieval_context: str) -> list[str]:
         return [line for line in retrieval_context.splitlines() if line.startswith("Title: ")]
+
+    async def chat_debug_issue(
+        self,
+        messages: list[dict[str, str]],
+        retrieval_context: str,
+    ) -> str:
+        last_user_message = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        return (
+            f"**[LLM Not Configured]**\n\n"
+            f"I received your follow-up message: \"{last_user_message}\".\n\n"
+            f"To enable interactive conversational RAG chat, please configure a valid `GEMINI_API_KEY` or `OPENAI_API_KEY` in your `.env` file."
+        )

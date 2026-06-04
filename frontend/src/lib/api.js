@@ -50,6 +50,15 @@ export const explainDebug = (rawInput, topK = 3, includeGraphContext = true) =>
     }),
   });
 
+export const chatDebug = (messages, retrievalContext) =>
+  request('/debug/chat', {
+    method: 'POST',
+    body: JSON.stringify({
+      messages,
+      retrieval_context: retrievalContext,
+    }),
+  });
+
 // ── Analytics ──
 export const getAnalyticsSummary = () => request('/analytics/summary');
 

@@ -6,6 +6,8 @@ from app.models.explanation import (
     DebugExplainRequest,
     DebugExplanationResponse,
     ExplanationSource,
+    DebugChatRequest,
+    DebugChatResponse,
 )
 from app.retrieval.service import RetrievalService
 
@@ -68,3 +70,8 @@ class DebugExplanationService:
             lines.append("Graph Observations:")
             lines.extend(graph_observations)
         return "\n".join(lines).strip()
+
+    async def chat(self, request: DebugChatRequest) -> DebugChatResponse:
+        messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        reply = await self.provider.chat_debug_issue(messages, request.retrieval_context)
+        return DebugChatResponse(reply=reply)

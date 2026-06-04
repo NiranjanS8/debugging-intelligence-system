@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from app.explanations.service import DebugExplanationService
-from app.models.explanation import DebugExplainRequest, DebugExplanationResponse
+from app.models.explanation import DebugExplainRequest, DebugExplanationResponse, DebugChatRequest, DebugChatResponse
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -27,3 +27,12 @@ async def explain_debug_issue(request: DebugExplainRequest) -> DebugExplanationR
     except Exception as exc:
         logger.error(f"Debug explanation failed: {exc}", extra={"operation": "debug_explain"})
         raise HTTPException(status_code=500, detail=f"Debug explanation failed: {str(exc)}")
+
+
+@router.post("/chat", response_model=DebugChatResponse)
+async def chat_debug_issue(request: DebugChatRequest) -> DebugChatResponse:
+    try:
+        return await _get_service().chat(request)
+    except Exception as exc:
+        logger.error(f"Debug chat failed: {exc}", extra={"operation": "debug_chat"})
+        raise HTTPException(status_code=500, detail=f"Debug chat failed: {str(exc)}")
